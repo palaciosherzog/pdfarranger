@@ -219,3 +219,78 @@ def edit(metadata, pdffiles, parent):
 
             metadata[row[2]] = _strtometa(row[1], row[2])
     return r
+
+def edit_outline(outline, pdffiles, parent):
+    """
+    Edit the current outline
+
+    :param outline: The outline IterItem from a 'root' item
+    :param pdffiles: A list of PDF from witch to take the initial meta data
+    :param parent: The parent window
+    """
+
+
+    def copy_outline(root_node, nodes, document):
+        for n in nodes:
+            root_node.children.append(pikepdf.OutlineItem(n.title, document.pages.index(n.action['/D'][0])))
+            if n.children:
+                copy_outline(root_node.children[-1], n.children, document)
+
+    def walk_outline(ls, nodes, level=0):
+        for item in nodes:
+            page_num = item.destination if isinstance(item.destination, int) else '?'
+            liststore.append([('\t'*level) + item.title, str(page_num)])
+            if item.children:
+                walk_outline(ls, item.children, level+1)
+
+    # if we don't have an outline that was imported or loaded, try to generate it
+    if not outline.children:
+        for p in pdffiles:
+            doc = pikepdf.open(p.copyname, password=p.password)
+            with doc.open_outline() as oline:
+                #walk_outline(outline, oline.root, doc)
+                #outline.children.extend(oline.root)
+                copy_outline(outline, oline.root, doc)
+    dialog = Gtk.Dialog(title=_('Edit outline'),
+                        parent=parent,
+                        flags=Gtk.DialogFlags.MODAL,
+                        buttons=(Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
+                                 Gtk.STOCK_OK, Gtk.ResponseType.OK))
+    ok_button = dialog.get_widget_for_response(response_id = Gtk.ResponseType.OK)
+    ok_button.grab_focus()
+    # Title, Page Number
+    liststore = Gtk.ListStore(str, str)
+    walk_outline(liststore, outline.children)
+    '''for item in outline.children:
+        page_num = item.destination if isinstance(item.destination, int) else '?'
+        liststore.append([item.title, str(page_num)])'''
+    treeview = Gtk.TreeView.new_with_model(liststore)
+    for i, v in enumerate([(_("Property"), False), (_("Value")+" "*30, True)]):
+        title, editable = v
+        renderer = Gtk.CellRendererText()
+        if editable:
+            renderer.set_property("editable", True)
+            handler = _EditedEventHandler(liststore)
+            renderer.connect("editing-started", handler.started)
+            renderer.connect("edited", handler.edited, parent)
+            renderer.connect("editing-canceled", handler.canceled)
+        column = Gtk.TreeViewColumn(title, renderer, text=i)
+        treeview.append_column(column)
+    treeview.props.margin = 12
+    treeview.set_enable_search(False)
+    treeview.set_cursor(Gtk.TreePath(0), treeview.get_column(1), True)
+    dialog.vbox.pack_start(treeview, True, True, 0)
+    dialog.resize(400, 400);
+    dialog.show_all()
+    result = dialog.run()
+    r = result == Gtk.ResponseType.OK
+    dialog.destroy()
+    '''if r:
+        for row in liststore:
+            # Capture invalid input when the emission of the edited signal is
+            # bypassed by pressing OK while editing.
+            if row[2] in [_CREATED, _MODIFIED]:
+                row[1] = handler._parse_date(row[1], parent)
+
+            metadata[row[2]] = _strtometa(row[1], row[2])'''
+    return r

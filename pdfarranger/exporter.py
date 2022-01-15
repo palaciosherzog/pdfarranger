@@ -115,16 +115,13 @@ def check_content(parent, pdf_list):
         if "/AcroForm" in pdf.Root.keys(): # fillable form
             warn = True
             break
-        if pdf.open_outline().root: # table of contents
-            warn = True
-            break
     if warn:
         d = Gtk.Dialog(_('Warning'),
                        parent=parent,
                        flags=Gtk.DialogFlags.MODAL,
                        buttons=(Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
                                 Gtk.STOCK_OK, Gtk.ResponseType.OK))
-        label = Gtk.Label(_('Forms and outlines are lost on saving.'))
+        label = Gtk.Label(_('Forms are lost on saving.'))
         d.vbox.pack_start(label, False, False, 6)
         checkbutton = Gtk.CheckButton(_('Do not show this dialog again.'))
         d.vbox.pack_start(checkbutton, False, False, 6)
@@ -155,7 +152,7 @@ def _remove_unreferenced_resources(pdfdoc):
 	# unwanted exception so we print it.
         print(traceback.format_exc())
 
-def export(input_files, pages, file_out, mode, mdata):
+def export(input_files, pages, file_out, mode, mdata, oline):
     exportmodes = {0: 'ALL_TO_SINGLE',
                    1: 'ALL_TO_MULTIPLE',
                    2: 'SELECTED_TO_SINGLE',
@@ -211,6 +208,8 @@ def export(input_files, pages, file_out, mode, mdata):
             outpdf.save(outname)
     else:
         _set_meta(mdata, pdf_input, pdf_output)
+        with pdf_output.open_outline() as outline:
+            outline.root.extend(oline.children)
         _remove_unreferenced_resources(pdf_output)
         pdf_output.save(file_out)
 

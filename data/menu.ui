@@ -207,6 +207,16 @@ along with PDF Arranger.  If not, see <http://www.gnu.org/licenses/>.
     </section>
     <section>
       <item>
+        <attribute name="label" translatable="yes">Import New Outline</attribute>
+        <attribute name="action">win.new-outline</attribute>
+      </item>
+      <item>
+        <attribute name="label" translatable="yes">Edit Outline</attribute>
+        <attribute name="action">win.outline</attribute>
+      </item>
+    </section>
+    <section>
+      <item>
         <attribute name="label" translatable="yes">_About</attribute>
         <attribute name="action">win.about</attribute>
       </item>

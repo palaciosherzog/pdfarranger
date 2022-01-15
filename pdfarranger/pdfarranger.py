@@ -250,6 +250,7 @@ class PdfArranger(Gtk.Application):
         self.iv_auto_scroll_timer = None
         self.pdfqueue = []
         self.metadata = {}
+        self.outline = pikepdf.OutlineItem('root')
         self.pressed_button = None
         self.click_path = None
         self.rendering_thread = None
@@ -339,6 +340,8 @@ class PdfArranger(Gtk.Application):
             ('redo', self.undomanager.redo),
             ('split', self.split_pages),
             ('metadata', self.edit_metadata),
+            ('new-outline', self.import_outline),
+            ('outline', self.edit_outline),
             ('cut', self.on_action_cut),
             ('copy', self.on_action_copy),
             ('paste', self.on_action_paste, 'i'),
@@ -426,6 +429,13 @@ class PdfArranger(Gtk.Application):
                 f.add_pattern('*.pdf')
                 f.add_mime_type('application/pdf')
             filter_list.append(f_pdf)
+        if 'txt' in file_type_list:
+            f_txt = Gtk.FileFilter()
+            f_txt.set_name(_('Text files'))
+            for f in [f_txt, f_supported]:
+                f.add_pattern('*.txt')
+                f.add_mime_type('text/plain')
+            filter_list.append(f_txt)
         if 'all' in file_type_list:
             f = Gtk.FileFilter()
             f.set_name(_('All files'))
@@ -1068,7 +1078,7 @@ class PdfArranger(Gtk.Application):
             self.config.set_content_loss_warning(enabled)
             if res == Gtk.ResponseType.CANCEL:
                 return # Abort
-        exporter.export(self.pdfqueue, to_export, file_out, mode, m)
+        exporter.export(self.pdfqueue, to_export, file_out, mode, m, self.outline)
 
         if exportmode == 'ALL_TO_SINGLE':
             self.set_unsaved(False)
@@ -1972,6 +1982,49 @@ class PdfArranger(Gtk.Application):
     def edit_metadata(self, _action, _parameter, _unknown):
         if metadata.edit(self.metadata, self.pdfqueue, self.window):
             self.set_unsaved(True)
+    
+    def edit_outline(self, _action, _param, _unknown):
+        if metadata.edit_outline(self.outline, self.pdfqueue, self.window):
+            self.set_unsaved(True)
+    
+    def import_outline(self, _action, _param, _unknown):
+        """Import text document for toc"""
+        chooser = Gtk.FileChooserDialog(title=_('Import…'),
+                                        parent=self.window,
+                                        action=Gtk.FileChooserAction.OPEN,
+                                        buttons=(Gtk.STOCK_CANCEL,
+                                                 Gtk.ResponseType.CANCEL,
+                                                 Gtk.STOCK_OPEN,
+                                                 Gtk.ResponseType.ACCEPT))
+        chooser.set_current_folder(self.import_directory)
+        chooser.set_select_multiple(False)
+        file_type_list = ['all', 'txt']
+        filter_list = self.__create_filters(file_type_list)
+        for f in filter_list:
+            chooser.add_filter(f)
+
+        response = chooser.run()
+        if response == Gtk.ResponseType.ACCEPT:
+            for filename in chooser.get_filenames():
+                current_level = 0
+                items = [pikepdf.OutlineItem('root')]
+                with open(filename) as toc_doc:
+                    for line in toc_doc.readlines():
+                        name, page_num = line.rstrip().rsplit('/', maxsplit=1)
+                        num_tabs = 0
+                        while name[0] == '\t':
+                            num_tabs += 1
+                            if num_tabs > current_level:
+                                items.append(items[current_level].children[-1])
+                                current_level += 1
+                            name = name[1:]
+                        while num_tabs < current_level:
+                            current_level -= 1
+                            items.pop()
+                        items[current_level].children.append(
+                            pikepdf.OutlineItem(name, int(page_num)-1))
+                self.outline = items[0]
+        chooser.destroy()
 
     def page_format_dialog(self, _action, _parameter, _unknown):
         """Opens a dialog box to define margins for page cropping and page size"""
